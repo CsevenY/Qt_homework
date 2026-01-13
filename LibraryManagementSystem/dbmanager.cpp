@@ -7,64 +7,7 @@ DBManager& DBManager::getInstance()
     return instance;
 }
 
-// 构造函数：初始化数据库连接
-DBManager::DBManager()
-{
-    // 加载SQLite驱动
-    m_db = QSqlDatabase::addDatabase("QSQLITE");
-    // 设置数据库文件路径（和项目同目录下的library.db）
-    m_db.setDatabaseName("./library.db");
 
-    // 打开数据库
-    if (!m_db.open()) {
-        qDebug() << "数据库连接失败：" << m_db.lastError().text();
-    } else {
-        qDebug() << "数据库连接成功！";
-        // 可选：如果Navicat没创建表，程序自动创建（防止表不存在）
-        QSqlQuery query;
-        // 创建图书表
-        query.exec(R"(
-            CREATE TABLE IF NOT EXISTS books (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                isbn TEXT UNIQUE NOT NULL,
-                title TEXT NOT NULL,
-                author TEXT NOT NULL,
-                publisher TEXT,
-                publish_date TEXT,
-                category TEXT,
-                stock INTEGER DEFAULT 0,
-                status INTEGER DEFAULT 0
-            )
-        )");
-        // 创建读者表
-        query.exec(R"(
-            CREATE TABLE IF NOT EXISTS readers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reader_id TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                gender TEXT,
-                phone TEXT,
-                email TEXT,
-                register_date TEXT,
-                status INTEGER DEFAULT 0
-            )
-        )");
-        // 创建借阅表
-        query.exec(R"(
-            CREATE TABLE IF NOT EXISTS borrows (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                book_id INTEGER NOT NULL,
-                reader_id INTEGER NOT NULL,
-                borrow_date TEXT NOT NULL,
-                return_date TEXT NOT NULL,
-                actual_return_date TEXT,
-                status INTEGER DEFAULT 0,
-                FOREIGN KEY (book_id) REFERENCES books(id),
-                FOREIGN KEY (reader_id) REFERENCES readers(id)
-            )
-        )");
-    }
-}
 
 DBManager::~DBManager()
 {
