@@ -55,7 +55,38 @@
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="cbBookCategory"/>
+           <widget class="QComboBox" name="cbBookCategory">
+            <item>
+             <property name="text">
+              <string>社会科学类</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>自然科学类</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>工程技术类</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>文学艺术类</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>哲学宗教类</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>综合类</string>
+             </property>
+            </item>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btnBookSearch">
