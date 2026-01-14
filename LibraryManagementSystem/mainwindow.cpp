@@ -7,6 +7,8 @@
 #include <QSqlError>
 #include <QHeaderView>
 #include <QDate>
+#include <QStyledItemDelegate>
+#include <QComboBox>
 
 namespace {
 int findBookIdByIsbn(const QString &isbn)
@@ -87,6 +89,63 @@ void MainWindow::initBookTab()
     ui->tvBooks->setColumnHidden(0, true);
     ui->tvBooks->horizontalHeader()->setStretchLastSection(true);
     ui->tvBooks->setSortingEnabled(true);
+
+    // 为分类列（第6列，索引6）设置下拉框代理
+    // 创建一个自定义代理，使用QComboBox作为编辑器
+    class CategoryDelegate : public QStyledItemDelegate
+    {
+    public:
+        CategoryDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+        
+        QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+                              const QModelIndex &index) const override
+        {
+            if (index.column() == 6) { // 分类列
+                QComboBox *combo = new QComboBox(parent);
+                combo->addItem("社会科学类");
+                combo->addItem("自然科学类");
+                combo->addItem("工程技术类");
+                combo->addItem("文学艺术类");
+                combo->addItem("哲学宗教类");
+                combo->addItem("综合类");
+                combo->setEditable(false);
+                return combo;
+            }
+            return QStyledItemDelegate::createEditor(parent, option, index);
+        }
+        
+        void setEditorData(QWidget *editor, const QModelIndex &index) const override
+        {
+            if (index.column() == 6) {
+                QComboBox *combo = qobject_cast<QComboBox*>(editor);
+                if (combo) {
+                    QString value = index.model()->data(index, Qt::EditRole).toString();
+                    int idx = combo->findText(value);
+                    if (idx >= 0)
+                        combo->setCurrentIndex(idx);
+                    else
+                        combo->setCurrentIndex(0);
+                }
+            } else {
+                QStyledItemDelegate::setEditorData(editor, index);
+            }
+        }
+        
+        void setModelData(QWidget *editor, QAbstractItemModel *model,
+                          const QModelIndex &index) const override
+        {
+            if (index.column() == 6) {
+                QComboBox *combo = qobject_cast<QComboBox*>(editor);
+                if (combo) {
+                    model->setData(index, combo->currentText(), Qt::EditRole);
+                }
+            } else {
+                QStyledItemDelegate::setModelData(editor, model, index);
+            }
+        }
+    };
+    
+    ui->tvBooks->setItemDelegateForColumn(6, new CategoryDelegate(this));
 }
 
 void MainWindow::initReaderTab()
@@ -232,7 +291,8 @@ void MainWindow::onBookFilter()
         conds << QString("title LIKE '%%1%'").arg(title.replace("'", "''"));
     if (!author.isEmpty())
         conds << QString("author LIKE '%%1%'").arg(author.replace("'", "''"));
-    if (!category.isEmpty())
+    // 只有当分类下拉框有选中项时才添加分类条件
+    if (!category.isEmpty() && ui->cbBookCategory->currentIndex() >= 0)
         conds << QString("category='%1'").arg(category.replace("'", "''"));
 
     m_bookModel->setFilter(conds.join(" AND "));

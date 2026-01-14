@@ -5,6 +5,8 @@
 #include <QSqlTableModel>
 #include <QSqlQueryModel>
 #include <QTimer>
+#include <QStyledItemDelegate>
+#include <QComboBox>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
