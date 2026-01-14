@@ -291,8 +291,8 @@ void MainWindow::onBookFilter()
         conds << QString("title LIKE '%%1%'").arg(title.replace("'", "''"));
     if (!author.isEmpty())
         conds << QString("author LIKE '%%1%'").arg(author.replace("'", "''"));
-    // 只有当分类下拉框有选中项时才添加分类条件
-    if (!category.isEmpty() && ui->cbBookCategory->currentIndex() >= 0)
+    // 只有当分类下拉框有选中项且不是"全部"时才添加分类条件
+    if (!category.isEmpty() && category != "全部" && ui->cbBookCategory->currentIndex() > 0)
         conds << QString("category='%1'").arg(category.replace("'", "''"));
 
     m_bookModel->setFilter(conds.join(" AND "));
@@ -303,7 +303,7 @@ void MainWindow::onBookResetFilter()
 {
     ui->leBookTitle->clear();
     ui->leBookAuthor->clear();
-    ui->cbBookCategory->setCurrentIndex(-1);
+    ui->cbBookCategory->setCurrentIndex(0); // 设置为"全部"
     m_bookModel->setFilter(QString());
     m_bookModel->select();
 }
