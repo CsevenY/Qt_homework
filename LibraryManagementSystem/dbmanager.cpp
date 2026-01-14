@@ -13,7 +13,7 @@ DBManager::DBManager()
     // 加载SQLite驱动
     m_db = QSqlDatabase::addDatabase("QSQLITE");
     // 设置数据库文件路径（和项目同目录下的library.db）
-    m_db.setDatabaseName("./library.db");
+    m_db.setDatabaseName("E:/Qt_project/Qt_homework/LibraryDB/library.db");
 
     // 打开数据库
     if (!m_db.open()) {
