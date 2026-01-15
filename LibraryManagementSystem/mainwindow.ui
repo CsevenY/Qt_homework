@@ -58,11 +58,6 @@
            <widget class="QComboBox" name="cbBookCategory">
             <item>
              <property name="text">
-              <string>全部</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
               <string>社会科学类</string>
              </property>
             </item>
