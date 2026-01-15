@@ -90,7 +90,7 @@ void MainWindow::initBookTab()
     ui->tvBooks->horizontalHeader()->setStretchLastSection(true);
     ui->tvBooks->setSortingEnabled(true);
 
-    // 为分类列设置下拉框代理
+    // 为分类列（第6列，索引6）设置下拉框代理
     // 创建一个自定义代理，使用QComboBox作为编辑器
     class CategoryDelegate : public QStyledItemDelegate
     {
@@ -254,7 +254,10 @@ void MainWindow::onBookAdd()
 {
     int row = m_bookModel->rowCount();
     m_bookModel->insertRow(row);
-    m_bookModel->setData(m_bookModel->index(row, 7), 1);
+    const int colStock = m_bookModel->fieldIndex("stock");
+    if (colStock >= 0) {
+        m_bookModel->setData(m_bookModel->index(row, colStock), 1);
+    }
 }
 
 void MainWindow::onBookRemove()

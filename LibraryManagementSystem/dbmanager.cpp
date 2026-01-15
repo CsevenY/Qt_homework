@@ -199,39 +199,70 @@ QSqlQuery DBManager::getAllReaders()
 // ========== 借阅表操作实现 ==========
 bool DBManager::borrowBook(int bookId, int readerId, const QString& borrowDate, const QString& returnDate)
 {
-    // 1. 检查图书库存
+    // 使用事务确保原子性
+    if (!m_db.transaction()) {
+        return false;
+    }
+    
+    // 1. 检查图书库存并锁定行（使用SELECT FOR UPDATE在SQLite中不支持，但我们可以用事务）
     QSqlQuery stockQuery;
     stockQuery.prepare("SELECT stock FROM books WHERE id = :id");
     stockQuery.bindValue(":id", bookId);
     if (!stockQuery.exec()) {
-        qDebug() << "查询图书库存失败：" << stockQuery.lastError().text();
+        m_db.rollback();
         return false;
     }
-    if (stockQuery.next() && stockQuery.value(0).toInt() > 0) {
-        // 2. 插入借阅记录
-        QSqlQuery borrowQuery;
-        borrowQuery.prepare(R"(
-            INSERT INTO borrows (book_id, reader_id, borrow_date, return_date, status)
-            VALUES (:book_id, :reader_id, :borrow_date, :return_date, 0)
-        )");
-        borrowQuery.bindValue(":book_id", bookId);
-        borrowQuery.bindValue(":reader_id", readerId);
-        borrowQuery.bindValue(":borrow_date", borrowDate);
-        borrowQuery.bindValue(":return_date", returnDate);
-        if (borrowQuery.exec()) {
-            // 3. 减少图书库存
-            QSqlQuery updateStockQuery;
-            updateStockQuery.prepare("UPDATE books SET stock = stock - 1 WHERE id = :id");
-            updateStockQuery.bindValue(":id", bookId);
-            return updateStockQuery.exec();
-        } else {
-            qDebug() << "插入借阅记录失败：" << borrowQuery.lastError().text();
-        }
-    } else {
-        qDebug() << "库存不足或未找到图书，bookId =" << bookId
-                 << " stock =" << (stockQuery.isActive() && stockQuery.isValid() ? stockQuery.value(0).toInt() : -1);
+    
+    if (!stockQuery.next()) {
+        m_db.rollback();
+        return false;
     }
-    return false;
+    
+    int stock = stockQuery.value(0).toInt();
+    if (stock <= 0) {
+        m_db.rollback();
+        return false;
+    }
+    
+    // 2. 插入借阅记录
+    QSqlQuery borrowQuery(m_db);
+    borrowQuery.prepare(R"(
+        INSERT INTO borrows (book_id, reader_id, borrow_date, return_date, status)
+        VALUES (:book_id, :reader_id, :borrow_date, :return_date, 0)
+    )");
+    borrowQuery.bindValue(":book_id", bookId);
+    borrowQuery.bindValue(":reader_id", readerId);
+    borrowQuery.bindValue(":borrow_date", borrowDate);
+    borrowQuery.bindValue(":return_date", returnDate);
+    
+    if (!borrowQuery.exec()) {
+        m_db.rollback();
+        return false;
+    }
+    
+    // 3. 减少图书库存
+    QSqlQuery updateStockQuery(m_db);
+    updateStockQuery.prepare("UPDATE books SET stock = stock - 1 WHERE id = :id AND stock > 0");
+    updateStockQuery.bindValue(":id", bookId);
+    
+    if (!updateStockQuery.exec()) {
+        m_db.rollback();
+        return false;
+    }
+    
+    // 检查是否真的更新了库存（防止并发问题）
+    if (updateStockQuery.numRowsAffected() == 0) {
+        m_db.rollback();
+        return false;
+    }
+    
+    // 提交事务
+    if (!m_db.commit()) {
+        m_db.rollback();
+        return false;
+    }
+    
+    return true;
 }
 
 bool DBManager::returnBook(int borrowId, const QString& actualReturnDate)

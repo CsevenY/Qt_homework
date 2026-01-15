@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tabBooks">
        <attribute name="title">
@@ -317,13 +317,6 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="0" colspan="2">
-           <widget class="QPushButton" name="btnBorrowDo">
-            <property name="text">
-             <string>借书</string>
-            </property>
-           </widget>
-          </item>
          </layout>
         </item>
         <item>
@@ -332,7 +325,26 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayoutBorrowButtons">
           <item>
+           <widget class="QPushButton" name="btnBorrowDo">
+            <property name="minimumSize">
+             <size>
+              <width>100</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>借书</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="btnReturnDo">
+            <property name="minimumSize">
+             <size>
+              <width>100</width>
+              <height>30</height>
+             </size>
+            </property>
             <property name="text">
              <string>还书</string>
             </property>
