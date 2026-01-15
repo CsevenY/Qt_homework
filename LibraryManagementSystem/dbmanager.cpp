@@ -203,7 +203,11 @@ bool DBManager::borrowBook(int bookId, int readerId, const QString& borrowDate, 
     QSqlQuery stockQuery;
     stockQuery.prepare("SELECT stock FROM books WHERE id = :id");
     stockQuery.bindValue(":id", bookId);
-    if (stockQuery.exec() && stockQuery.next() && stockQuery.value(0).toInt() > 0) {
+    if (!stockQuery.exec()) {
+        qDebug() << "查询图书库存失败：" << stockQuery.lastError().text();
+        return false;
+    }
+    if (stockQuery.next() && stockQuery.value(0).toInt() > 0) {
         // 2. 插入借阅记录
         QSqlQuery borrowQuery;
         borrowQuery.prepare(R"(
@@ -220,7 +224,12 @@ bool DBManager::borrowBook(int bookId, int readerId, const QString& borrowDate, 
             updateStockQuery.prepare("UPDATE books SET stock = stock - 1 WHERE id = :id");
             updateStockQuery.bindValue(":id", bookId);
             return updateStockQuery.exec();
+        } else {
+            qDebug() << "插入借阅记录失败：" << borrowQuery.lastError().text();
         }
+    } else {
+        qDebug() << "库存不足或未找到图书，bookId =" << bookId
+                 << " stock =" << (stockQuery.isActive() && stockQuery.isValid() ? stockQuery.value(0).toInt() : -1);
     }
     return false;
 }

@@ -414,6 +414,17 @@ void MainWindow::onBorrowBook()
     QString borrowDate = ui->deBorrowDate->date().toString("yyyy-MM-dd");
     QString returnDate = ui->deReturnDate->date().toString("yyyy-MM-dd");
 
+    // 确保图书库存等修改已经提交到数据库，避免界面有值但数据库仍为0的情况
+    if (m_bookModel && m_bookModel->isDirty()) {
+        if (!m_bookModel->submitAll()) {
+            QMessageBox::warning(this, tr("提示"),
+                                 tr("保存图书信息失败：%1").arg(m_bookModel->lastError().text()));
+            m_bookModel->revertAll();
+            return;
+        }
+        m_bookModel->select();
+    }
+
     DBManager &db = DBManager::getInstance();
     if (db.borrowBook(bookId, readerId, borrowDate, returnDate)) {
         QMessageBox::information(this, tr("成功"), tr("借书成功。"));
@@ -421,7 +432,10 @@ void MainWindow::onBorrowBook()
         initBorrowTab();
         refreshStatsAndOverdue();
     } else {
-        QMessageBox::warning(this, tr("失败"), tr("借书失败，可能库存不足。"));
+        QMessageBox::warning(this, tr("失败"),
+                             tr("借书失败，请检查：\n"
+                                "1. 图书库存是否大于0；\n"
+                                "2. 读者与图书是否存在且有效。"));
     }
 }
 
