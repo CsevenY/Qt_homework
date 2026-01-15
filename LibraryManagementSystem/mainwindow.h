@@ -2,11 +2,28 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QSqlTableModel>
-#include <QSqlQueryModel>
-#include <QTimer>
-#include <QStyledItemDelegate>
+#include <QTabWidget>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGridLayout>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QLabel>
+#include <QTableView>
+#include <QGroupBox>
+#include <QDateEdit>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QTextEdit>
 #include <QComboBox>
+#include <QMessageBox>
+#include <QTimer>
+#include <QStatusBar>
+
+#include "databasemanager.h"
+#include "bookmodel.h"
+#include "readermodel.h"
+#include "borrowmodel.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -22,48 +39,54 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-private:
-    // 初始化各个功能页
-    void initBookTab();
-    void initReaderTab();
-    void initBorrowTab();
-    void initStatsTab();
-    void initConnections();
-    void checkOverdueOnce();
-
 private slots:
     // 图书管理
-    void onBookAdd();
-    void onBookRemove();
-    void onBookSubmit();
-    void onBookRevert();
-    void onBookFilter();
-    void onBookResetFilter();
-
+    void onDeleteBook();
+    void onSearchBooks();
+    void onBookSelectionChanged();
+    
     // 读者管理
-    void onReaderAdd();
-    void onReaderRemove();
-    void onReaderSubmit();
-    void onReaderRevert();
-    void onReaderFilter();
-    void onReaderResetFilter();
-
-    // 借还书
-    void onBorrowBook();
+    void onDeleteReader();
+    void onSearchReaders();
+    void onReaderSelectionChanged();
+    
+    // 借还书管理
     void onReturnBook();
-
-    // 统计与逾期
-    void refreshStatsAndOverdue();
+    void onSearchBorrowRecords();
+    void onBorrowSelectionChanged();
+    
+    // 统计信息
+    void refreshStatistics();
+    
+    // 逾期提醒
+    void checkOverdueBooks();
 
 private:
     Ui::MainWindow *ui;
-
-    // 数据模型
-    QSqlTableModel  *m_bookModel   = nullptr;
-    QSqlTableModel  *m_readerModel = nullptr;
-    QSqlQueryModel  *m_borrowModel = nullptr;
-    QSqlQueryModel  *m_overdueModel = nullptr;
-
-    QTimer          *m_statsTimer = nullptr;
+    
+    // 数据库和模型
+    BookModel *bookModel;
+    ReaderModel *readerModel;
+    BorrowModel *borrowModel;
+    
+    // 定时器（用于逾期提醒）
+    QTimer *overdueTimer;
+    
+    // 当前选中的ID
+    int currentBookId;
+    int currentReaderId;
+    int currentBorrowId;
+    
+    void setupUI();
+    void setupBookTab();
+    void setupReaderTab();
+    void setupBorrowTab();
+    void setupStatisticsTab();
+    void showBookDialog(bool isEdit = false);
+    void showReaderDialog(bool isEdit = false);
+    void showBorrowDialog();
+    void loadBookCategories();
+    QStringList getDefaultCategories() const;
 };
+
 #endif // MAINWINDOW_H

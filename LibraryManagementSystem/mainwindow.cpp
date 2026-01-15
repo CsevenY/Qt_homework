@@ -1,62 +1,46 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "dbmanager.h"
-
-#include <QMessageBox>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <QHeaderView>
 #include <QDate>
-#include <QStyledItemDelegate>
-#include <QComboBox>
-
-namespace {
-int findBookIdByIsbn(const QString &isbn)
-{
-    QSqlQuery q;
-    q.prepare("SELECT id FROM books WHERE isbn=:isbn");
-    q.bindValue(":isbn", isbn);
-    if (q.exec() && q.next())
-        return q.value(0).toInt();
-    return -1;
-}
-
-int findReaderIdByReaderNo(const QString &readerNo)
-{
-    QSqlQuery q;
-    q.prepare("SELECT id FROM readers WHERE reader_id=:rid");
-    q.bindValue(":rid", readerNo);
-    if (q.exec() && q.next())
-        return q.value(0).toInt();
-    return -1;
-}
-}
+#include <QSqlQuery>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QSet>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , bookModel(nullptr)
+    , readerModel(nullptr)
+    , borrowModel(nullptr)
+    , overdueTimer(new QTimer(this))
+    , currentBookId(-1)
+    , currentReaderId(-1)
+    , currentBorrowId(-1)
 {
     ui->setupUi(this);
-
-    DBManager &db = DBManager::getInstance();
-    if (!db.isConnected()) {
-        QMessageBox::critical(this, tr("错误"),
-                              tr("数据库连接失败，部分功能不可用。"));
+    
+    // 初始化数据库
+    QString dbPath = "E:\\Qt_project\\Qt_homework\\LibraryDB\\library.db";
+    if (!DatabaseManager::getInstance().initializeDatabase(dbPath)) {
+        QMessageBox::critical(this, "错误", "数据库初始化失败！");
+        return;
     }
-
-    initBookTab();
-    initReaderTab();
-    initBorrowTab();
-    initStatsTab();
-    initConnections();
-
-    checkOverdueOnce();
-
-    m_statsTimer = new QTimer(this);
-    m_statsTimer->setInterval(60 * 1000);
-    connect(m_statsTimer, &QTimer::timeout,
-            this, &MainWindow::refreshStatsAndOverdue);
-    m_statsTimer->start();
+    
+    // 创建模型
+    QSqlDatabase db = DatabaseManager::getInstance().getDatabase();
+    bookModel = new BookModel(this, db);
+    readerModel = new ReaderModel(this, db);
+    borrowModel = new BorrowModel(this, db);
+    
+    // 设置UI
+    setupUI();
+    
+    // 设置定时器检查逾期（每小时检查一次）
+    connect(overdueTimer, &QTimer::timeout, this, &MainWindow::checkOverdueBooks);
+    overdueTimer->start(3600000); // 1小时 = 3600000毫秒
+    checkOverdueBooks(); // 启动时立即检查一次
 }
 
 MainWindow::~MainWindow()
@@ -64,416 +48,598 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::initBookTab()
+void MainWindow::setupUI()
 {
-    m_bookModel = new QSqlTableModel(this);
-    m_bookModel->setTable("books");
-    m_bookModel->setEditStrategy(QSqlTableModel::OnManualSubmit);
-    m_bookModel->select();
-
-    m_bookModel->setHeaderData(0, Qt::Horizontal, tr("ID"));
-    m_bookModel->setHeaderData(1, Qt::Horizontal, tr("ISBN"));
-    m_bookModel->setHeaderData(2, Qt::Horizontal, tr("书名"));
-    m_bookModel->setHeaderData(3, Qt::Horizontal, tr("作者"));
-    m_bookModel->setHeaderData(4, Qt::Horizontal, tr("出版社"));
-    m_bookModel->setHeaderData(5, Qt::Horizontal, tr("出版日期"));
-    m_bookModel->setHeaderData(6, Qt::Horizontal, tr("分类"));
-    m_bookModel->setHeaderData(7, Qt::Horizontal, tr("库存"));
-    m_bookModel->setHeaderData(8, Qt::Horizontal, tr("状态"));
-
-    ui->tvBooks->setModel(m_bookModel);
-    ui->tvBooks->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->tvBooks->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tvBooks->setEditTriggers(QAbstractItemView::DoubleClicked
-                                 | QAbstractItemView::SelectedClicked);
-    ui->tvBooks->setColumnHidden(0, true);
-    ui->tvBooks->horizontalHeader()->setStretchLastSection(true);
-    ui->tvBooks->setSortingEnabled(true);
-
-    // 为分类列（第6列，索引6）设置下拉框代理
-    // 创建一个自定义代理，使用QComboBox作为编辑器
-    class CategoryDelegate : public QStyledItemDelegate
-    {
-    public:
-        CategoryDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-        
-        QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option,
-                              const QModelIndex &index) const override
-        {
-            if (index.column() == 6) { // 分类列
-                QComboBox *combo = new QComboBox(parent);
-                combo->addItem("社会科学类");
-                combo->addItem("自然科学类");
-                combo->addItem("工程技术类");
-                combo->addItem("文学艺术类");
-                combo->addItem("哲学宗教类");
-                combo->addItem("综合类");
-                combo->setEditable(false);
-                return combo;
-            }
-            return QStyledItemDelegate::createEditor(parent, option, index);
-        }
-        
-        void setEditorData(QWidget *editor, const QModelIndex &index) const override
-        {
-            if (index.column() == 6) {
-                QComboBox *combo = qobject_cast<QComboBox*>(editor);
-                if (combo) {
-                    QString value = index.model()->data(index, Qt::EditRole).toString();
-                    int idx = combo->findText(value);
-                    if (idx >= 0)
-                        combo->setCurrentIndex(idx);
-                    else
-                        combo->setCurrentIndex(0);
-                }
-            } else {
-                QStyledItemDelegate::setEditorData(editor, index);
-            }
-        }
-        
-        void setModelData(QWidget *editor, QAbstractItemModel *model,
-                          const QModelIndex &index) const override
-        {
-            if (index.column() == 6) {
-                QComboBox *combo = qobject_cast<QComboBox*>(editor);
-                if (combo) {
-                    model->setData(index, combo->currentText(), Qt::EditRole);
-                }
-            } else {
-                QStyledItemDelegate::setModelData(editor, model, index);
-            }
-        }
-    };
+    // UI已经在.ui文件中定义，这里只需要设置模型和连接信号
+    setupBookTab();
+    setupReaderTab();
+    setupBorrowTab();
+    setupStatisticsTab();
     
-    ui->tvBooks->setItemDelegateForColumn(6, new CategoryDelegate(this));
+    // 状态栏
+    ui->statusbar->showMessage("就绪");
 }
 
-void MainWindow::initReaderTab()
+void MainWindow::setupBookTab()
 {
-    m_readerModel = new QSqlTableModel(this);
-    m_readerModel->setTable("readers");
-    m_readerModel->setEditStrategy(QSqlTableModel::OnManualSubmit);
-    m_readerModel->select();
-
-    m_readerModel->setHeaderData(0, Qt::Horizontal, tr("ID"));
-    m_readerModel->setHeaderData(1, Qt::Horizontal, tr("证号"));
-    m_readerModel->setHeaderData(2, Qt::Horizontal, tr("姓名"));
-    m_readerModel->setHeaderData(3, Qt::Horizontal, tr("性别"));
-    m_readerModel->setHeaderData(4, Qt::Horizontal, tr("电话"));
-    m_readerModel->setHeaderData(5, Qt::Horizontal, tr("邮箱"));
-    m_readerModel->setHeaderData(6, Qt::Horizontal, tr("注册日期"));
-    m_readerModel->setHeaderData(7, Qt::Horizontal, tr("状态"));
-
-    ui->tvReaders->setModel(m_readerModel);
-    ui->tvReaders->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->tvReaders->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tvReaders->setColumnHidden(0, true);
-    ui->tvReaders->horizontalHeader()->setStretchLastSection(true);
-    ui->tvReaders->setSortingEnabled(true);
-}
-
-void MainWindow::initBorrowTab()
-{
-    if (!m_borrowModel)
-        m_borrowModel = new QSqlQueryModel(this);
-
-    QString sql =
-        "SELECT b.id, bo.title AS book_title, r.name AS reader_name, "
-        "b.borrow_date, b.return_date, b.actual_return_date, b.status "
-        "FROM borrows b "
-        "JOIN books bo ON b.book_id = bo.id "
-        "JOIN readers r ON b.reader_id = r.id";
-
-    m_borrowModel->setQuery(sql);
-    m_borrowModel->setHeaderData(0, Qt::Horizontal, tr("借阅ID"));
-    m_borrowModel->setHeaderData(1, Qt::Horizontal, tr("书名"));
-    m_borrowModel->setHeaderData(2, Qt::Horizontal, tr("读者"));
-    m_borrowModel->setHeaderData(3, Qt::Horizontal, tr("借出日期"));
-    m_borrowModel->setHeaderData(4, Qt::Horizontal, tr("应还日期"));
-    m_borrowModel->setHeaderData(5, Qt::Horizontal, tr("实际归还"));
-    m_borrowModel->setHeaderData(6, Qt::Horizontal, tr("状态"));
-
-    ui->tvBorrows->setModel(m_borrowModel);
-    ui->tvBorrows->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->tvBorrows->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tvBorrows->horizontalHeader()->setStretchLastSection(true);
-
-    ui->deBorrowDate->setDate(QDate::currentDate());
-    ui->deReturnDate->setDate(QDate::currentDate().addDays(30));
-}
-
-void MainWindow::initStatsTab()
-{
-    m_overdueModel = new QSqlQueryModel(this);
-    ui->tvOverdues->setModel(m_overdueModel);
-    ui->tvOverdues->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->tvOverdues->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tvOverdues->horizontalHeader()->setStretchLastSection(true);
-
-    refreshStatsAndOverdue();
-}
-
-void MainWindow::initConnections()
-{
-    // 图书
-    connect(ui->btnBookAdd,    &QPushButton::clicked, this, &MainWindow::onBookAdd);
-    connect(ui->btnBookRemove, &QPushButton::clicked, this, &MainWindow::onBookRemove);
-    connect(ui->btnBookSubmit, &QPushButton::clicked, this, &MainWindow::onBookSubmit);
-    connect(ui->btnBookRevert, &QPushButton::clicked, this, &MainWindow::onBookRevert);
-    connect(ui->btnBookSearch, &QPushButton::clicked, this, &MainWindow::onBookFilter);
-    connect(ui->btnBookReset,  &QPushButton::clicked, this, &MainWindow::onBookResetFilter);
-
-    // 读者
-    connect(ui->btnReaderAdd,    &QPushButton::clicked, this, &MainWindow::onReaderAdd);
-    connect(ui->btnReaderRemove, &QPushButton::clicked, this, &MainWindow::onReaderRemove);
-    connect(ui->btnReaderSubmit, &QPushButton::clicked, this, &MainWindow::onReaderSubmit);
-    connect(ui->btnReaderRevert, &QPushButton::clicked, this, &MainWindow::onReaderRevert);
-    connect(ui->btnReaderSearch, &QPushButton::clicked, this, &MainWindow::onReaderFilter);
-    connect(ui->btnReaderReset,  &QPushButton::clicked, this, &MainWindow::onReaderResetFilter);
-
-    // 借还
-    connect(ui->btnBorrowDo, &QPushButton::clicked, this, &MainWindow::onBorrowBook);
-    connect(ui->btnReturnDo, &QPushButton::clicked, this, &MainWindow::onReturnBook);
-}
-
-void MainWindow::checkOverdueOnce()
-{
-    refreshStatsAndOverdue();
-
-    bool ok = false;
-    int overdueCount = ui->lblOverdue->text().toInt(&ok);
-    if (ok && overdueCount > 0) {
-        QMessageBox::warning(this, tr("逾期提醒"),
-                             tr("当前存在 %1 条逾期借阅记录，请及时处理。")
-                                 .arg(overdueCount));
-    }
-}
-
-// 图书管理槽函数
-void MainWindow::onBookAdd()
-{
-    int row = m_bookModel->rowCount();
-    m_bookModel->insertRow(row);
-    const int colStock = m_bookModel->fieldIndex("stock");
-    if (colStock >= 0) {
-        m_bookModel->setData(m_bookModel->index(row, colStock), 1);
-    }
-}
-
-void MainWindow::onBookRemove()
-{
-    QModelIndex idx = ui->tvBooks->currentIndex();
-    if (!idx.isValid()) return;
-    m_bookModel->removeRow(idx.row());
-}
-
-void MainWindow::onBookSubmit()
-{
-    if (!m_bookModel->submitAll()) {
-        QMessageBox::warning(this, tr("保存失败"),
-                             m_bookModel->lastError().text());
-        m_bookModel->revertAll();
-    } else {
-        m_bookModel->select();
-    }
-}
-
-void MainWindow::onBookRevert()
-{
-    m_bookModel->revertAll();
-}
-
-void MainWindow::onBookFilter()
-{
-    QString title = ui->leBookTitle->text().trimmed();
-    QString author = ui->leBookAuthor->text().trimmed();
-    QString category = ui->cbBookCategory->currentText().trimmed();
-
-    QStringList conds;
-    if (!title.isEmpty())
-        conds << QString("title LIKE '%%1%'").arg(title.replace("'", "''"));
-    if (!author.isEmpty())
-        conds << QString("author LIKE '%%1%'").arg(author.replace("'", "''"));
-    // 只有当分类下拉框有选中项且不是"全部"时才添加分类条件
-    if (!category.isEmpty() && category != "全部" && ui->cbBookCategory->currentIndex() > 0)
-        conds << QString("category='%1'").arg(category.replace("'", "''"));
-
-    m_bookModel->setFilter(conds.join(" AND "));
-    m_bookModel->select();
-}
-
-void MainWindow::onBookResetFilter()
-{
-    ui->leBookTitle->clear();
-    ui->leBookAuthor->clear();
-    ui->cbBookCategory->setCurrentIndex(0); // 设置为"全部"
-    m_bookModel->setFilter(QString());
-    m_bookModel->select();
-}
-
-// 读者管理槽函数
-void MainWindow::onReaderAdd()
-{
-    int row = m_readerModel->rowCount();
-    m_readerModel->insertRow(row);
-}
-
-void MainWindow::onReaderRemove()
-{
-    QModelIndex idx = ui->tvReaders->currentIndex();
-    if (!idx.isValid()) return;
-    m_readerModel->removeRow(idx.row());
-}
-
-void MainWindow::onReaderSubmit()
-{
-    if (!m_readerModel->submitAll()) {
-        QMessageBox::warning(this, tr("保存失败"),
-                             m_readerModel->lastError().text());
-        m_readerModel->revertAll();
-    } else {
-        m_readerModel->select();
-    }
-}
-
-void MainWindow::onReaderRevert()
-{
-    m_readerModel->revertAll();
-}
-
-void MainWindow::onReaderFilter()
-{
-    QString rid = ui->leReaderId->text().trimmed();
-    QString name = ui->leReaderName->text().trimmed();
-    QString statusText = ui->cbReaderStatus->currentText().trimmed();
-
-    QStringList conds;
-    if (!rid.isEmpty())
-        conds << QString("reader_id LIKE '%%1%'").arg(rid.replace("'", "''"));
-    if (!name.isEmpty())
-        conds << QString("name LIKE '%%1%'").arg(name.replace("'", "''"));
-    if (!statusText.isEmpty()) {
-        bool ok = false;
-        int status = statusText.toInt(&ok);
-        if (ok) {
-            conds << QString("status=%1").arg(status);
+    // 连接信号
+    connect(ui->bookSearchEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchBooks);
+    connect(ui->bookCategoryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+            this, &MainWindow::onSearchBooks);
+    connect(ui->bookAddBtn, &QPushButton::clicked, this, [this]() { showBookDialog(false); });
+    connect(ui->bookEditBtn, &QPushButton::clicked, this, [this]() { showBookDialog(true); });
+    connect(ui->bookDeleteBtn, &QPushButton::clicked, this, &MainWindow::onDeleteBook);
+    
+    // 设置表格模型
+    ui->bookTableView->setModel(bookModel);
+    ui->bookTableView->horizontalHeader()->setStretchLastSection(true);
+    ui->bookTableView->setColumnWidth(0, 50);
+    ui->bookTableView->setColumnWidth(1, 120);
+    ui->bookTableView->setColumnWidth(2, 200);
+    // 隐藏不需要显示的列：total_copies(7)、available_copies(8)，以及可能的stock和status字段
+    ui->bookTableView->setColumnHidden(7, true);  // total_copies (stock)
+    ui->bookTableView->setColumnHidden(8, true);  // available_copies
+    // 检查并隐藏其他可能的字段
+    for (int i = 0; i < bookModel->columnCount(); i++) {
+        QString header = bookModel->headerData(i, Qt::Horizontal).toString().toLower();
+        if (header.contains("stock") || header.contains("status")) {
+            ui->bookTableView->setColumnHidden(i, true);
         }
     }
-
-    m_readerModel->setFilter(conds.join(" AND "));
-    m_readerModel->select();
+    connect(ui->bookTableView, &QTableView::doubleClicked, this, [this]() { showBookDialog(true); });
+    connect(ui->bookTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::onBookSelectionChanged);
+    
+    // 初始化分类下拉框
+    ui->bookCategoryCombo->addItem("全部分类", "");
+    
+    // 加载分类列表
+    loadBookCategories();
 }
 
-void MainWindow::onReaderResetFilter()
+void MainWindow::setupReaderTab()
 {
-    ui->leReaderId->clear();
-    ui->leReaderName->clear();
-    ui->cbReaderStatus->setCurrentIndex(-1);
-    m_readerModel->setFilter(QString());
-    m_readerModel->select();
+    // 连接信号
+    connect(ui->readerSearchEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchReaders);
+    connect(ui->readerAddBtn, &QPushButton::clicked, this, [this]() { showReaderDialog(false); });
+    connect(ui->readerEditBtn, &QPushButton::clicked, this, [this]() { showReaderDialog(true); });
+    connect(ui->readerDeleteBtn, &QPushButton::clicked, this, &MainWindow::onDeleteReader);
+    
+    // 设置表格模型
+    ui->readerTableView->setModel(readerModel);
+    ui->readerTableView->horizontalHeader()->setStretchLastSection(true);
+    // 隐藏不需要显示的列：地址(6)、状态(8)、update_time、create_time
+    ui->readerTableView->setColumnHidden(6, true);  // 地址
+    ui->readerTableView->setColumnHidden(7, true);  //注册时间
+    ui->readerTableView->setColumnHidden(8, true);  // 状态
+    // 检查并隐藏update_time和create_time列
+    for (int i = 0; i < readerModel->columnCount(); i++) {
+        QString header = readerModel->headerData(i, Qt::Horizontal).toString().toLower();
+        if (header.contains("update_time") || header.contains("create_time")) {
+            ui->readerTableView->setColumnHidden(i, true);
+        }
+    }
+    connect(ui->readerTableView, &QTableView::doubleClicked, this, [this]() { showReaderDialog(true); });
+    connect(ui->readerTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::onReaderSelectionChanged);
 }
 
-// 借还书槽函数
-void MainWindow::onBorrowBook()
+void MainWindow::setupBorrowTab()
 {
-    QString readerNo = ui->leBorrowReaderId->text().trimmed();
-    QString isbn = ui->leBorrowIsbn->text().trimmed();
-    if (readerNo.isEmpty() || isbn.isEmpty()) {
-        QMessageBox::warning(this, tr("提示"), tr("请填写读者证号和图书ISBN。"));
-        return;
-    }
+    // 连接信号
+    connect(ui->borrowSearchEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchBorrowRecords);
+    connect(ui->borrowBookBtn, &QPushButton::clicked, this, &MainWindow::showBorrowDialog);
+    connect(ui->returnBookBtn, &QPushButton::clicked, this, &MainWindow::onReturnBook);
+    
+    // 设置表格模型
+    ui->borrowTableView->setModel(borrowModel);
+    ui->borrowTableView->horizontalHeader()->setStretchLastSection(true);
+    connect(ui->borrowTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::onBorrowSelectionChanged);
+}
 
-    int readerId = findReaderIdByReaderNo(readerNo);
-    int bookId = findBookIdByIsbn(isbn);
-    if (readerId < 0 || bookId < 0) {
-        QMessageBox::warning(this, tr("提示"), tr("未找到对应读者或图书。"));
-        return;
-    }
+void MainWindow::setupStatisticsTab()
+{
+    // UI已经在.ui文件中定义，这里只需要刷新统计数据
+    refreshStatistics();
+}
 
-    QString borrowDate = ui->deBorrowDate->date().toString("yyyy-MM-dd");
-    QString returnDate = ui->deReturnDate->date().toString("yyyy-MM-dd");
-
-    // 确保图书库存等修改已经提交到数据库，避免界面有值但数据库仍为0的情况
-    if (m_bookModel && m_bookModel->isDirty()) {
-        if (!m_bookModel->submitAll()) {
-            QMessageBox::warning(this, tr("提示"),
-                                 tr("保存图书信息失败：%1").arg(m_bookModel->lastError().text()));
-            m_bookModel->revertAll();
+// 显示图书对话框
+void MainWindow::showBookDialog(bool isEdit)
+{
+    if (isEdit) {
+        QModelIndexList indexes = ui->bookTableView->selectionModel()->selectedRows();
+        if (indexes.isEmpty()) {
+            QMessageBox::warning(this, "警告", "请先选择要编辑的图书！");
             return;
         }
-        m_bookModel->select();
-    }
-
-    DBManager &db = DBManager::getInstance();
-    if (db.borrowBook(bookId, readerId, borrowDate, returnDate)) {
-        QMessageBox::information(this, tr("成功"), tr("借书成功。"));
-        m_bookModel->select();
-        initBorrowTab();
-        refreshStatsAndOverdue();
+        currentBookId = bookModel->data(bookModel->index(indexes.first().row(), 0)).toInt();
     } else {
-        QMessageBox::warning(this, tr("失败"),
-                             tr("借书失败，请检查：\n"
-                                "1. 图书库存是否大于0；\n"
-                                "2. 读者与图书是否存在且有效。"));
+        currentBookId = -1;
+    }
+    
+    QDialog dialog(this);
+    dialog.setWindowTitle(isEdit ? "编辑图书" : "添加图书");
+    dialog.setMinimumWidth(400);
+    
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QLineEdit *isbnEdit = new QLineEdit();
+    QLineEdit *titleEdit = new QLineEdit();
+    QLineEdit *authorEdit = new QLineEdit();
+    QLineEdit *publisherEdit = new QLineEdit();
+    QDateEdit *publishDateEdit = new QDateEdit();
+    publishDateEdit->setCalendarPopup(true);
+    publishDateEdit->setDate(QDate::currentDate());
+    QComboBox *categoryCombo = new QComboBox();
+    categoryCombo->setEditable(true); // 允许手动输入其他分类
+    categoryCombo->addItems(getDefaultCategories());
+    QSpinBox *totalCopiesEdit = new QSpinBox();
+    totalCopiesEdit->setMinimum(1);
+    totalCopiesEdit->setMaximum(9999);
+    totalCopiesEdit->setValue(1);
+    
+    formLayout->addRow("ISBN*:", isbnEdit);
+    formLayout->addRow("书名*:", titleEdit);
+    formLayout->addRow("作者:", authorEdit);
+    formLayout->addRow("出版社:", publisherEdit);
+    formLayout->addRow("出版日期:", publishDateEdit);
+    formLayout->addRow("分类:", categoryCombo);
+    formLayout->addRow("总册数:", totalCopiesEdit);
+    
+    // 如果是编辑模式，填充现有数据
+    if (isEdit && currentBookId >= 0) {
+        QModelIndexList indexes = ui->bookTableView->selectionModel()->selectedRows();
+        QModelIndex index = indexes.first();
+        isbnEdit->setText(bookModel->data(bookModel->index(index.row(), 1)).toString());
+        titleEdit->setText(bookModel->data(bookModel->index(index.row(), 2)).toString());
+        authorEdit->setText(bookModel->data(bookModel->index(index.row(), 3)).toString());
+        publisherEdit->setText(bookModel->data(bookModel->index(index.row(), 4)).toString());
+        QString dateStr = bookModel->data(bookModel->index(index.row(), 5)).toString();
+        if (!dateStr.isEmpty()) {
+            publishDateEdit->setDate(QDate::fromString(dateStr, "yyyy-MM-dd"));
+        }
+        QString category = bookModel->data(bookModel->index(index.row(), 6)).toString();
+        int categoryIndex = categoryCombo->findText(category);
+        if (categoryIndex >= 0) {
+            categoryCombo->setCurrentIndex(categoryIndex);
+        } else {
+            categoryCombo->setCurrentText(category); // 如果不在列表中，设置为当前文本
+        }
+        totalCopiesEdit->setValue(bookModel->data(bookModel->index(index.row(), 7)).toInt());
+    }
+    
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->addLayout(formLayout);
+    mainLayout->addWidget(buttonBox);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        if (isbnEdit->text().isEmpty() || titleEdit->text().isEmpty()) {
+            QMessageBox::warning(this, "警告", "ISBN和书名不能为空！");
+            return;
+        }
+        
+        bool success;
+        QString category = categoryCombo->currentText().trimmed();
+        if (isEdit) {
+            success = bookModel->updateBook(
+                currentBookId,
+                isbnEdit->text(),
+                titleEdit->text(),
+                authorEdit->text(),
+                publisherEdit->text(),
+                publishDateEdit->date().toString("yyyy-MM-dd"),
+                category,
+                totalCopiesEdit->value()
+            );
+        } else {
+            success = bookModel->addBook(
+                isbnEdit->text(),
+                titleEdit->text(),
+                authorEdit->text(),
+                publisherEdit->text(),
+                publishDateEdit->date().toString("yyyy-MM-dd"),
+                category,
+                totalCopiesEdit->value()
+            );
+        }
+        
+        if (success) {
+            QMessageBox::information(this, "成功", isEdit ? "图书更新成功！" : "图书添加成功！");
+            ui->statusbar->showMessage(isEdit ? "图书更新成功" : "图书添加成功", 3000);
+            // 刷新分类列表
+            loadBookCategories();
+        } else {
+            // 检查是否是ISBN已存在的问题
+            QString errorMsg;
+            if (isEdit) {
+                errorMsg = "图书更新失败！请检查输入信息是否正确。";
+            } else {
+                if (bookModel->isbnExists(isbnEdit->text().trimmed())) {
+                    errorMsg = QString("图书添加失败！ISBN \"%1\" 已存在，请使用不同的ISBN。").arg(isbnEdit->text().trimmed());
+                } else if (isbnEdit->text().trimmed().isEmpty()) {
+                    errorMsg = "图书添加失败！ISBN不能为空。";
+                } else {
+                    errorMsg = "图书添加失败！请检查输入信息是否正确。";
+                }
+            }
+            QMessageBox::warning(this, "失败", errorMsg);
+        }
+    }
+}
+
+void MainWindow::onDeleteBook()
+{
+    QModelIndexList indexes = ui->bookTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要删除的图书！");
+        return;
+    }
+    
+    currentBookId = bookModel->data(bookModel->index(indexes.first().row(), 0)).toInt();
+    
+    int ret = QMessageBox::question(this, "确认", "确定要删除这本图书吗？",
+                                    QMessageBox::Yes | QMessageBox::No);
+    if (ret == QMessageBox::Yes) {
+        if (bookModel->deleteBook(currentBookId)) {
+            QMessageBox::information(this, "成功", "图书删除成功！");
+            ui->statusbar->showMessage("图书删除成功", 3000);
+            // 刷新分类列表
+            loadBookCategories();
+        } else {
+            QMessageBox::warning(this, "失败", "图书删除失败！");
+        }
+    }
+}
+
+void MainWindow::onSearchBooks()
+{
+    QString keyword = ui->bookSearchEdit->text();
+    QString category = ui->bookCategoryCombo->currentData().toString();
+    
+    // 如果选择了分类，使用分类筛选
+    if (!category.isEmpty()) {
+        bookModel->filterBooks("", "", "", category);
+    } else if (!keyword.isEmpty()) {
+        // 如果有关键词，使用关键词搜索（不限制分类）
+        bookModel->filterBooks(keyword, keyword, keyword, "");
+    } else {
+        // 清空筛选
+        bookModel->setFilter("");
+    }
+    bookModel->select();
+}
+
+QStringList MainWindow::getDefaultCategories() const
+{
+    return QStringList() << "社会科学类" << "自然科学类" << "工程技术类" 
+                        << "文学艺术类" << "哲学宗教类" << "综合类";
+}
+
+void MainWindow::loadBookCategories()
+{
+    QSqlQuery query(DatabaseManager::getInstance().getDatabase());
+    query.exec("SELECT DISTINCT category FROM books WHERE category IS NOT NULL AND category != '' ORDER BY category");
+    
+    // 保存当前选中的分类
+    QString currentCategory = ui->bookCategoryCombo->currentData().toString();
+    
+    // 清空并重新加载（保留"全部分类"选项）
+    ui->bookCategoryCombo->clear();
+    ui->bookCategoryCombo->addItem("全部分类", "");
+    
+    // 添加预设分类
+    QStringList defaultCategories = getDefaultCategories();
+    for (const QString &cat : defaultCategories) {
+        ui->bookCategoryCombo->addItem(cat, cat);
+    }
+    
+    // 添加数据库中已有的其他分类
+    QSet<QString> categories(defaultCategories.begin(), defaultCategories.end());
+    while (query.next()) {
+        QString cat = query.value(0).toString().trimmed();
+        if (!cat.isEmpty() && !categories.contains(cat)) {
+            categories.insert(cat);
+            ui->bookCategoryCombo->addItem(cat, cat);
+        }
+    }
+    
+    // 恢复之前选中的分类
+    int index = ui->bookCategoryCombo->findData(currentCategory);
+    if (index >= 0) {
+        ui->bookCategoryCombo->setCurrentIndex(index);
+    }
+}
+
+void MainWindow::onBookSelectionChanged()
+{
+    QModelIndexList indexes = ui->bookTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        currentBookId = -1;
+        return;
+    }
+    QModelIndex index = indexes.first();
+    currentBookId = bookModel->data(bookModel->index(index.row(), 0)).toInt();
+}
+
+// 显示读者对话框
+void MainWindow::showReaderDialog(bool isEdit)
+{
+    if (isEdit) {
+        QModelIndexList indexes = ui->readerTableView->selectionModel()->selectedRows();
+        if (indexes.isEmpty()) {
+            QMessageBox::warning(this, "警告", "请先选择要编辑的读者！");
+            return;
+        }
+        currentReaderId = readerModel->data(readerModel->index(indexes.first().row(), 0)).toInt();
+    } else {
+        currentReaderId = -1;
+    }
+    
+    QDialog dialog(this);
+    dialog.setWindowTitle(isEdit ? "编辑读者" : "添加读者");
+    dialog.setMinimumWidth(400);
+    
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QLineEdit *readerIdEdit = new QLineEdit();
+    QLineEdit *nameEdit = new QLineEdit();
+    QComboBox *genderEdit = new QComboBox();
+    genderEdit->addItems({"", "男", "女"});
+    QLineEdit *phoneEdit = new QLineEdit();
+    QLineEdit *emailEdit = new QLineEdit();
+    QLineEdit *addressEdit = new QLineEdit();
+    
+    formLayout->addRow("读者编号*:", readerIdEdit);
+    formLayout->addRow("姓名*:", nameEdit);
+    formLayout->addRow("性别:", genderEdit);
+    formLayout->addRow("电话:", phoneEdit);
+    formLayout->addRow("邮箱:", emailEdit);
+    formLayout->addRow("地址:", addressEdit);
+    
+    // 如果是编辑模式，填充现有数据
+    if (isEdit && currentReaderId >= 0) {
+        QModelIndexList indexes = ui->readerTableView->selectionModel()->selectedRows();
+        QModelIndex index = indexes.first();
+        readerIdEdit->setText(readerModel->data(readerModel->index(index.row(), 1)).toString());
+        nameEdit->setText(readerModel->data(readerModel->index(index.row(), 2)).toString());
+        QString gender = readerModel->data(readerModel->index(index.row(), 3)).toString();
+        int genderIndex = genderEdit->findText(gender);
+        if (genderIndex >= 0) genderEdit->setCurrentIndex(genderIndex);
+        phoneEdit->setText(readerModel->data(readerModel->index(index.row(), 4)).toString());
+        emailEdit->setText(readerModel->data(readerModel->index(index.row(), 5)).toString());
+        addressEdit->setText(readerModel->data(readerModel->index(index.row(), 6)).toString());
+    }
+    
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->addLayout(formLayout);
+    mainLayout->addWidget(buttonBox);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        if (readerIdEdit->text().isEmpty() || nameEdit->text().isEmpty()) {
+            QMessageBox::warning(this, "警告", "读者编号和姓名不能为空！");
+            return;
+        }
+        
+        bool success;
+        if (isEdit) {
+            success = readerModel->updateReader(
+                currentReaderId,
+                readerIdEdit->text(),
+                nameEdit->text(),
+                genderEdit->currentText(),
+                phoneEdit->text(),
+                emailEdit->text(),
+                addressEdit->text()
+            );
+        } else {
+            success = readerModel->addReader(
+                readerIdEdit->text(),
+                nameEdit->text(),
+                genderEdit->currentText(),
+                phoneEdit->text(),
+                emailEdit->text(),
+                addressEdit->text()
+            );
+        }
+        
+        if (success) {
+            QMessageBox::information(this, "成功", isEdit ? "读者更新成功！" : "读者添加成功！");
+            ui->statusbar->showMessage(isEdit ? "读者更新成功" : "读者添加成功", 3000);
+        } else {
+            QMessageBox::warning(this, "失败", isEdit ? "读者更新失败！" : "读者添加失败，读者编号可能已存在！");
+        }
+    }
+}
+
+void MainWindow::onDeleteReader()
+{
+    QModelIndexList indexes = ui->readerTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要删除的读者！");
+        return;
+    }
+    
+    currentReaderId = readerModel->data(readerModel->index(indexes.first().row(), 0)).toInt();
+    
+    int ret = QMessageBox::question(this, "确认", "确定要删除这位读者吗？",
+                                    QMessageBox::Yes | QMessageBox::No);
+    if (ret == QMessageBox::Yes) {
+        if (readerModel->deleteReader(currentReaderId)) {
+            QMessageBox::information(this, "成功", "读者删除成功！");
+            ui->statusbar->showMessage("读者删除成功", 3000);
+        } else {
+            QMessageBox::warning(this, "失败", "读者删除失败！");
+        }
+    }
+}
+
+void MainWindow::onSearchReaders()
+{
+    QString keyword = ui->readerSearchEdit->text();
+    if (keyword.isEmpty()) {
+        readerModel->setFilter("");
+    } else {
+        readerModel->filterReaders(keyword, keyword, keyword, "");
+    }
+    readerModel->select();
+}
+
+void MainWindow::onReaderSelectionChanged()
+{
+    QModelIndexList indexes = ui->readerTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        currentReaderId = -1;
+        return;
+    }
+    QModelIndex index = indexes.first();
+    currentReaderId = readerModel->data(readerModel->index(index.row(), 0)).toInt();
+}
+
+// 显示借书对话框
+void MainWindow::showBorrowDialog()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("借书");
+    dialog.setMinimumWidth(350);
+    
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QLineEdit *readerIdEdit = new QLineEdit();
+    QLineEdit *bookIsbnEdit = new QLineEdit();
+    QSpinBox *daysEdit = new QSpinBox();
+    daysEdit->setMinimum(1);
+    daysEdit->setMaximum(365);
+    daysEdit->setValue(30);
+    
+    formLayout->addRow("读者编号*:", readerIdEdit);
+    formLayout->addRow("图书ISBN*:", bookIsbnEdit);
+    formLayout->addRow("借阅天数:", daysEdit);
+    
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->addLayout(formLayout);
+    mainLayout->addWidget(buttonBox);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        if (readerIdEdit->text().isEmpty() || bookIsbnEdit->text().isEmpty()) {
+            QMessageBox::warning(this, "警告", "读者编号和图书ISBN不能为空！");
+            return;
+        }
+        
+        bool success = borrowModel->borrowBook(
+            readerIdEdit->text(),
+            bookIsbnEdit->text(),
+            daysEdit->value()
+        );
+        
+        if (success) {
+            QMessageBox::information(this, "成功", "借书成功！");
+            refreshStatistics();
+            ui->statusbar->showMessage("借书成功", 3000);
+        } else {
+            QMessageBox::warning(this, "失败", "借书失败，请检查读者编号、图书ISBN或图书是否可借！");
+        }
     }
 }
 
 void MainWindow::onReturnBook()
 {
-    QModelIndex idx = ui->tvBorrows->currentIndex();
-    if (!idx.isValid()) {
-        QMessageBox::warning(this, tr("提示"), tr("请先选择一条借阅记录。"));
+    QModelIndexList indexes = ui->borrowTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要归还的记录！");
         return;
     }
-
-    int row = idx.row();
-    int borrowId = m_borrowModel->data(m_borrowModel->index(row, 0)).toInt();
-    QString actualReturnDate = QDate::currentDate().toString("yyyy-MM-dd");
-
-    DBManager &db = DBManager::getInstance();
-    if (db.returnBook(borrowId, actualReturnDate)) {
-        QMessageBox::information(this, tr("成功"), tr("还书成功。"));
-        m_bookModel->select();
-        initBorrowTab();
-        refreshStatsAndOverdue();
-    } else {
-        QMessageBox::warning(this, tr("失败"), tr("还书失败。"));
+    
+    currentBorrowId = borrowModel->data(borrowModel->index(indexes.first().row(), 0)).toInt();
+    
+    double fine = borrowModel->calculateFine(currentBorrowId);
+    QString message = "确定要归还这本书吗？";
+    if (fine > 0) {
+        message += QString("\n逾期罚款：%1 元").arg(fine, 0, 'f', 2);
+    }
+    
+    int ret = QMessageBox::question(this, "确认", message,
+                                    QMessageBox::Yes | QMessageBox::No);
+    if (ret == QMessageBox::Yes) {
+        if (borrowModel->returnBook(currentBorrowId)) {
+            QMessageBox::information(this, "成功", fine > 0 ? 
+                QString("还书成功！逾期罚款：%1 元").arg(fine, 0, 'f', 2) : "还书成功！");
+            refreshStatistics();
+            ui->statusbar->showMessage("还书成功", 3000);
+        } else {
+            QMessageBox::warning(this, "失败", "还书失败！");
+        }
     }
 }
 
-// 统计与逾期
-void MainWindow::refreshStatsAndOverdue()
+void MainWindow::onSearchBorrowRecords()
 {
-    QSqlQuery q;
-
-    if (q.exec("SELECT COUNT(*), IFNULL(SUM(stock),0) FROM books")) {
-        if (q.next()) {
-            ui->lblTotalBooks->setText(q.value(0).toString());
-            ui->lblTotalStock->setText(q.value(1).toString());
-        }
+    QString keyword = ui->borrowSearchEdit->text();
+    if (keyword.isEmpty()) {
+        borrowModel->setFilter("");
+    } else {
+        borrowModel->filterRecords(keyword, keyword, "");
     }
+    borrowModel->select();
+}
 
-    if (q.exec("SELECT COUNT(*) FROM borrows")) {
-        if (q.next())
-            ui->lblTotalBorrows->setText(q.value(0).toString());
+void MainWindow::onBorrowSelectionChanged()
+{
+    QModelIndexList indexes = ui->borrowTableView->selectionModel()->selectedRows();
+    if (indexes.isEmpty()) {
+        currentBorrowId = -1;
+        return;
     }
+    QModelIndex index = indexes.first();
+    currentBorrowId = borrowModel->data(borrowModel->index(index.row(), 0)).toInt();
+}
 
-    if (q.exec("SELECT COUNT(*) FROM borrows WHERE status=0")) {
-        if (q.next())
-            ui->lblOnLoan->setText(q.value(0).toString());
+// 统计信息
+void MainWindow::refreshStatistics()
+{
+    // 图书总数
+    QSqlQuery query(DatabaseManager::getInstance().getDatabase());
+    query.exec("SELECT COUNT(*) FROM books");
+    if (query.next()) {
+        ui->totalBooksLabel->setText(QString::number(query.value(0).toInt()));
     }
-
-    if (q.exec("SELECT COUNT(*) FROM borrows WHERE status=2")) {
-        if (q.next())
-            ui->lblOverdue->setText(q.value(0).toString());
+    
+    // 读者总数
+    query.exec("SELECT COUNT(*) FROM readers");
+    if (query.next()) {
+        ui->totalReadersLabel->setText(QString::number(query.value(0).toInt()));
     }
+    
+    // 借阅统计
+    BorrowModel::Statistics stats = borrowModel->getStatistics();
+    ui->currentBorrowsLabel->setText(QString::number(stats.currentBorrows));
+    ui->overdueCountLabel->setText(QString::number(stats.overdueCount));
+}
 
-    DBManager &db = DBManager::getInstance();
-    QSqlQuery overdueQuery = db.getOverdueRecords();
-    m_overdueModel->setQuery(overdueQuery);
-    m_overdueModel->setHeaderData(0, Qt::Horizontal, tr("借阅ID"));
-    m_overdueModel->setHeaderData(1, Qt::Horizontal, tr("书名"));
-    m_overdueModel->setHeaderData(2, Qt::Horizontal, tr("读者"));
-    m_overdueModel->setHeaderData(3, Qt::Horizontal, tr("借出日期"));
-    m_overdueModel->setHeaderData(4, Qt::Horizontal, tr("应还日期"));
+// 逾期提醒
+void MainWindow::checkOverdueBooks()
+{
+    QList<int> overdueIds = borrowModel->getOverdueRecords();
+    if (!overdueIds.isEmpty()) {
+        QString message = QString("发现 %1 本图书逾期未归还！").arg(overdueIds.size());
+        ui->statusbar->showMessage(message, 10000);
+        
+        // 刷新借阅记录视图以显示逾期高亮
+        borrowModel->select();
+        
+        // 可选：显示消息框提醒
+        // QMessageBox::warning(this, "逾期提醒", message);
+    }
 }

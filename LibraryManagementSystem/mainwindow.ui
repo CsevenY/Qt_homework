@@ -6,448 +6,392 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
-    <height>700</height>
+    <width>1200</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>图书与借阅管理系统</string>
+   <string>图书管理系统</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>0</number>
       </property>
-      <widget class="QWidget" name="tabBooks">
+      <widget class="QWidget" name="bookTab">
        <attribute name="title">
         <string>图书管理</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayoutBooks">
+       <layout class="QVBoxLayout" name="bookTabLayout">
+        <property name="spacing">
+         <number>5</number>
+        </property>
+        <property name="leftMargin">
+         <number>5</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>5</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutBookFilter">
+         <layout class="QHBoxLayout" name="bookToolbarLayout">
           <item>
-           <widget class="QLabel" name="labelBookTitle">
-            <property name="text">
-             <string>书名：</string>
+           <widget class="QLineEdit" name="bookSearchEdit">
+            <property name="placeholderText">
+             <string>搜索：ISBN、书名、作者...</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="leBookTitle"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="labelBookAuthor">
+           <widget class="QLabel" name="bookCategoryLabel">
             <property name="text">
-             <string>作者：</string>
+             <string>分类:</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="leBookAuthor"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="labelBookCategory">
-            <property name="text">
-             <string>分类：</string>
+           <widget class="QComboBox" name="bookCategoryCombo">
+            <property name="minimumSize">
+             <size>
+              <width>120</width>
+              <height>0</height>
+             </size>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="cbBookCategory">
-            <item>
-             <property name="text">
-              <string>全部</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>社会科学类</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>自然科学类</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>工程技术类</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>文学艺术类</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>哲学宗教类</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>综合类</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnBookSearch">
+           <widget class="QPushButton" name="bookAddBtn">
             <property name="text">
-             <string>查询</string>
+             <string>添加</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnBookReset">
+           <widget class="QPushButton" name="bookEditBtn">
             <property name="text">
-             <string>重置</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QTableView" name="tvBooks"/>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutBookButtons">
-          <item>
-           <widget class="QPushButton" name="btnBookAdd">
-            <property name="text">
-             <string>新增</string>
+             <string>编辑</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnBookRemove">
+           <widget class="QPushButton" name="bookDeleteBtn">
             <property name="text">
              <string>删除</string>
             </property>
            </widget>
           </item>
-          <item>
-           <widget class="QPushButton" name="btnBookSubmit">
-            <property name="text">
-             <string>保存</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnBookRevert">
-            <property name="text">
-             <string>撤销</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="horizontalSpacerBook">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QTableView" name="bookTableView">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tabReaders">
+      <widget class="QWidget" name="readerTab">
        <attribute name="title">
         <string>读者管理</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayoutReaders">
+       <layout class="QVBoxLayout" name="readerTabLayout">
+        <property name="spacing">
+         <number>5</number>
+        </property>
+        <property name="leftMargin">
+         <number>5</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>5</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutReaderFilter">
+         <layout class="QHBoxLayout" name="readerToolbarLayout">
           <item>
-           <widget class="QLabel" name="labelReaderId">
-            <property name="text">
-             <string>证号：</string>
+           <widget class="QLineEdit" name="readerSearchEdit">
+            <property name="placeholderText">
+             <string>搜索：读者编号、姓名或电话...</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="leReaderId"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="labelReaderName">
+           <widget class="QPushButton" name="readerAddBtn">
             <property name="text">
-             <string>姓名：</string>
+             <string>添加</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="leReaderName"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="labelReaderStatus">
+           <widget class="QPushButton" name="readerEditBtn">
             <property name="text">
-             <string>状态：</string>
+             <string>编辑</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="cbReaderStatus"/>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnReaderSearch">
-            <property name="text">
-             <string>查询</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnReaderReset">
-            <property name="text">
-             <string>重置</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QTableView" name="tvReaders"/>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutReaderButtons">
-          <item>
-           <widget class="QPushButton" name="btnReaderAdd">
-            <property name="text">
-             <string>新增</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnReaderRemove">
+           <widget class="QPushButton" name="readerDeleteBtn">
             <property name="text">
              <string>删除</string>
             </property>
            </widget>
           </item>
-          <item>
-           <widget class="QPushButton" name="btnReaderSubmit">
-            <property name="text">
-             <string>保存</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnReaderRevert">
-            <property name="text">
-             <string>撤销</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="horizontalSpacerReader">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QTableView" name="readerTableView">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tabBorrow">
+      <widget class="QWidget" name="borrowTab">
        <attribute name="title">
-        <string>借还书</string>
+        <string>借还书管理</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayoutBorrow">
+       <layout class="QVBoxLayout" name="borrowTabLayout">
+        <property name="spacing">
+         <number>5</number>
+        </property>
+        <property name="leftMargin">
+         <number>5</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>5</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
         <item>
-         <layout class="QGridLayout" name="gridLayoutBorrowForm">
-          <item row="0" column="0">
-           <widget class="QLabel" name="labelBorrowReaderId">
-            <property name="text">
-             <string>读者证号：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QLineEdit" name="leBorrowReaderId"/>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="labelBorrowIsbn">
-            <property name="text">
-             <string>图书ISBN：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QLineEdit" name="leBorrowIsbn"/>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="labelBorrowDate">
-            <property name="text">
-             <string>借出日期：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QDateEdit" name="deBorrowDate">
-            <property name="calendarPopup">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="labelReturnDate">
-            <property name="text">
-             <string>应还日期：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <widget class="QDateEdit" name="deReturnDate">
-            <property name="calendarPopup">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QTableView" name="tvBorrows"/>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutBorrowButtons">
+         <layout class="QHBoxLayout" name="borrowToolbarLayout">
           <item>
-           <widget class="QPushButton" name="btnBorrowDo">
-            <property name="minimumSize">
-             <size>
-              <width>100</width>
-              <height>30</height>
-             </size>
+           <widget class="QLineEdit" name="borrowSearchEdit">
+            <property name="placeholderText">
+             <string>搜索：读者编号或图书ISBN...</string>
             </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="borrowBookBtn">
             <property name="text">
              <string>借书</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnReturnDo">
-            <property name="minimumSize">
-             <size>
-              <width>100</width>
-              <height>30</height>
-             </size>
-            </property>
+           <widget class="QPushButton" name="returnBookBtn">
             <property name="text">
              <string>还书</string>
             </property>
            </widget>
           </item>
-          <item>
-           <spacer name="horizontalSpacerBorrow">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QTableView" name="borrowTableView">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tabStats">
+      <widget class="QWidget" name="statisticsTab">
        <attribute name="title">
-        <string>统计与提醒</string>
+        <string>数据统计</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayoutStats">
+       <layout class="QVBoxLayout" name="statisticsTabLayout">
+        <property name="spacing">
+         <number>15</number>
+        </property>
+        <property name="leftMargin">
+         <number>20</number>
+        </property>
+        <property name="topMargin">
+         <number>20</number>
+        </property>
+        <property name="rightMargin">
+         <number>20</number>
+        </property>
+        <property name="bottomMargin">
+         <number>20</number>
+        </property>
         <item>
-         <layout class="QGridLayout" name="gridLayoutStats">
+         <layout class="QGridLayout" name="statisticsGridLayout">
+          <property name="spacing">
+           <number>15</number>
+          </property>
           <item row="0" column="0">
-           <widget class="QLabel" name="labelTotalBooksTitle">
-            <property name="text">
-             <string>总图书数：</string>
+           <widget class="QWidget" name="totalBooksCard" native="true">
+            <property name="styleSheet">
+             <string>QWidget { background-color: #f5f5f5; border-radius: 5px; padding: 15px; }</string>
             </property>
+            <layout class="QVBoxLayout" name="totalBooksLayout">
+             <item>
+              <widget class="QLabel" name="totalBooksTitleLabel">
+               <property name="styleSheet">
+                <string>color: #666; font-size: 14px;</string>
+               </property>
+               <property name="text">
+                <string>图书总数</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="totalBooksLabel">
+               <property name="styleSheet">
+                <string>color: #333; font-size: 24px; font-weight: bold;</string>
+               </property>
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QLabel" name="lblTotalBooks">
-            <property name="text">
-             <string>0</string>
+           <widget class="QWidget" name="totalReadersCard" native="true">
+            <property name="styleSheet">
+             <string>QWidget { background-color: #f5f5f5; border-radius: 5px; padding: 15px; }</string>
             </property>
-           </widget>
-          </item>
-          <item row="0" column="2">
-           <widget class="QLabel" name="labelTotalStockTitle">
-            <property name="text">
-             <string>总库存量：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="3">
-           <widget class="QLabel" name="lblTotalStock">
-            <property name="text">
-             <string>0</string>
-            </property>
+            <layout class="QVBoxLayout" name="totalReadersLayout">
+             <item>
+              <widget class="QLabel" name="totalReadersTitleLabel">
+               <property name="styleSheet">
+                <string>color: #666; font-size: 14px;</string>
+               </property>
+               <property name="text">
+                <string>读者总数</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="totalReadersLabel">
+               <property name="styleSheet">
+                <string>color: #333; font-size: 24px; font-weight: bold;</string>
+               </property>
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QLabel" name="labelTotalBorrowsTitle">
-            <property name="text">
-             <string>总借阅量：</string>
+           <widget class="QWidget" name="currentBorrowsCard" native="true">
+            <property name="styleSheet">
+             <string>QWidget { background-color: #f5f5f5; border-radius: 5px; padding: 15px; }</string>
             </property>
+            <layout class="QVBoxLayout" name="currentBorrowsLayout">
+             <item>
+              <widget class="QLabel" name="currentBorrowsTitleLabel">
+               <property name="styleSheet">
+                <string>color: #666; font-size: 14px;</string>
+               </property>
+               <property name="text">
+                <string>当前借出</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="currentBorrowsLabel">
+               <property name="styleSheet">
+                <string>color: #333; font-size: 24px; font-weight: bold;</string>
+               </property>
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QLabel" name="lblTotalBorrows">
-            <property name="text">
-             <string>0</string>
+           <widget class="QWidget" name="overdueCountCard" native="true">
+            <property name="styleSheet">
+             <string>QWidget { background-color: #ffe6e6; border-radius: 5px; padding: 15px; }</string>
             </property>
-           </widget>
-          </item>
-          <item row="1" column="2">
-           <widget class="QLabel" name="labelOnLoanTitle">
-            <property name="text">
-             <string>当前在借数：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="3">
-           <widget class="QLabel" name="lblOnLoan">
-            <property name="text">
-             <string>0</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="labelOverdueTitle">
-            <property name="text">
-             <string>当前逾期数：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QLabel" name="lblOverdue">
-            <property name="text">
-             <string>0</string>
-            </property>
+            <layout class="QVBoxLayout" name="overdueCountLayout">
+             <item>
+              <widget class="QLabel" name="overdueCountTitleLabel">
+               <property name="styleSheet">
+                <string>color: #666; font-size: 14px;</string>
+               </property>
+               <property name="text">
+                <string>逾期数量</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="overdueCountLabel">
+               <property name="styleSheet">
+                <string>color: #d32f2f; font-size: 24px; font-weight: bold;</string>
+               </property>
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
         </item>
         <item>
-         <widget class="QTableView" name="tvOverdues"/>
+         <spacer name="statisticsSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
         </item>
        </layout>
       </widget>
@@ -460,7 +404,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1000</width>
+     <width>1200</width>
      <height>25</height>
     </rect>
    </property>
