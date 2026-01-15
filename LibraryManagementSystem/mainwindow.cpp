@@ -71,36 +71,52 @@ void MainWindow::initBookTab()
     m_bookModel->setEditStrategy(QSqlTableModel::OnManualSubmit);
     m_bookModel->select();
 
-    m_bookModel->setHeaderData(0, Qt::Horizontal, tr("ID"));
-    m_bookModel->setHeaderData(1, Qt::Horizontal, tr("ISBN"));
-    m_bookModel->setHeaderData(2, Qt::Horizontal, tr("书名"));
-    m_bookModel->setHeaderData(3, Qt::Horizontal, tr("作者"));
-    m_bookModel->setHeaderData(4, Qt::Horizontal, tr("出版社"));
-    m_bookModel->setHeaderData(5, Qt::Horizontal, tr("出版日期"));
-    m_bookModel->setHeaderData(6, Qt::Horizontal, tr("分类"));
-    m_bookModel->setHeaderData(7, Qt::Horizontal, tr("库存"));
-    m_bookModel->setHeaderData(8, Qt::Horizontal, tr("状态"));
+    // 用字段名定位列，避免表结构变更导致列序号错乱
+    const int colId = m_bookModel->fieldIndex("id");
+    const int colIsbn = m_bookModel->fieldIndex("isbn");
+    const int colTitle = m_bookModel->fieldIndex("title");
+    const int colAuthor = m_bookModel->fieldIndex("author");
+    const int colPublisher = m_bookModel->fieldIndex("publisher");
+    const int colPublishDate = m_bookModel->fieldIndex("publish_date");
+    const int colCategory = m_bookModel->fieldIndex("category");
+    const int colStock = m_bookModel->fieldIndex("stock");
+    const int colStatus = m_bookModel->fieldIndex("status");
+    const int colCreateTime = m_bookModel->fieldIndex("create_time");
+
+    if (colId >= 0) m_bookModel->setHeaderData(colId, Qt::Horizontal, tr("ID"));
+    if (colIsbn >= 0) m_bookModel->setHeaderData(colIsbn, Qt::Horizontal, tr("ISBN"));
+    if (colTitle >= 0) m_bookModel->setHeaderData(colTitle, Qt::Horizontal, tr("书名"));
+    if (colAuthor >= 0) m_bookModel->setHeaderData(colAuthor, Qt::Horizontal, tr("作者"));
+    if (colPublisher >= 0) m_bookModel->setHeaderData(colPublisher, Qt::Horizontal, tr("出版社"));
+    if (colPublishDate >= 0) m_bookModel->setHeaderData(colPublishDate, Qt::Horizontal, tr("出版日期"));
+    if (colCategory >= 0) m_bookModel->setHeaderData(colCategory, Qt::Horizontal, tr("分类"));
+    if (colStock >= 0) m_bookModel->setHeaderData(colStock, Qt::Horizontal, tr("库存"));
+    if (colStatus >= 0) m_bookModel->setHeaderData(colStatus, Qt::Horizontal, tr("状态"));
+    // UI 不需要 create_time：如果表里有该字段，直接隐藏
+    if (colCreateTime >= 0) m_bookModel->setHeaderData(colCreateTime, Qt::Horizontal, tr("创建时间"));
 
     ui->tvBooks->setModel(m_bookModel);
     ui->tvBooks->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->tvBooks->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->tvBooks->setEditTriggers(QAbstractItemView::DoubleClicked
                                  | QAbstractItemView::SelectedClicked);
-    ui->tvBooks->setColumnHidden(0, true);
+    if (colId >= 0) ui->tvBooks->setColumnHidden(colId, true);
+    if (colCreateTime >= 0) ui->tvBooks->setColumnHidden(colCreateTime, true);
     ui->tvBooks->horizontalHeader()->setStretchLastSection(true);
     ui->tvBooks->setSortingEnabled(true);
 
-    // 为分类列（第6列，索引6）设置下拉框代理
+    // 为分类列设置下拉框代理
     // 创建一个自定义代理，使用QComboBox作为编辑器
     class CategoryDelegate : public QStyledItemDelegate
     {
     public:
-        CategoryDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+        explicit CategoryDelegate(int categoryColumn, QObject *parent = nullptr)
+            : QStyledItemDelegate(parent), m_categoryColumn(categoryColumn) {}
         
         QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option,
                               const QModelIndex &index) const override
         {
-            if (index.column() == 6) { // 分类列
+            if (index.column() == m_categoryColumn) { // 分类列
                 QComboBox *combo = new QComboBox(parent);
                 combo->addItem("社会科学类");
                 combo->addItem("自然科学类");
@@ -116,7 +132,7 @@ void MainWindow::initBookTab()
         
         void setEditorData(QWidget *editor, const QModelIndex &index) const override
         {
-            if (index.column() == 6) {
+            if (index.column() == m_categoryColumn) {
                 QComboBox *combo = qobject_cast<QComboBox*>(editor);
                 if (combo) {
                     QString value = index.model()->data(index, Qt::EditRole).toString();
@@ -134,7 +150,7 @@ void MainWindow::initBookTab()
         void setModelData(QWidget *editor, QAbstractItemModel *model,
                           const QModelIndex &index) const override
         {
-            if (index.column() == 6) {
+            if (index.column() == m_categoryColumn) {
                 QComboBox *combo = qobject_cast<QComboBox*>(editor);
                 if (combo) {
                     model->setData(index, combo->currentText(), Qt::EditRole);
@@ -143,9 +159,14 @@ void MainWindow::initBookTab()
                 QStyledItemDelegate::setModelData(editor, model, index);
             }
         }
+
+    private:
+        int m_categoryColumn = -1;
     };
     
-    ui->tvBooks->setItemDelegateForColumn(6, new CategoryDelegate(this));
+    if (colCategory >= 0) {
+        ui->tvBooks->setItemDelegateForColumn(colCategory, new CategoryDelegate(colCategory, this));
+    }
 }
 
 void MainWindow::initReaderTab()
@@ -254,7 +275,10 @@ void MainWindow::onBookAdd()
 {
     int row = m_bookModel->rowCount();
     m_bookModel->insertRow(row);
-    m_bookModel->setData(m_bookModel->index(row, 7), 1);
+    const int colStock = m_bookModel->fieldIndex("stock");
+    if (colStock >= 0) {
+        m_bookModel->setData(m_bookModel->index(row, colStock), 1);
+    }
 }
 
 void MainWindow::onBookRemove()
